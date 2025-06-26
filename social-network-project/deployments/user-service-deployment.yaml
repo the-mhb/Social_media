@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+spec:
+  replicas: 1 # Start with 1, can be scaled later
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-service
+        image: your-docker-registry/user-service:latest # Replace with your Docker image URI
+        ports:
+        - containerPort: 8081 # Port the service listens on inside the container
+        # env:
+        # - name: DATABASE_URL
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: postgresql-secret # Assuming you have a secret for DB credentials
+        #       key: database_url
+        # resources:
+        #   limits:
+        #     memory: "128Mi"
+        #     cpu: "500m"
+        #   requests:
+        #     memory: "64Mi"
+        #     cpu: "250m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+spec:
+  selector:
+    app: user-service
+  ports:
+    - protocol: TCP
+      port: 80 # Port the service is exposed on within the cluster
+      targetPort: 8081 # Port the container is listening on
+  # type: ClusterIP # Default type, only reachable within the cluster

@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  postgres_dev:
+    image: postgres:15-alpine
+    container_name: postgres_dev_social_network
+    environment:
+      POSTGRES_USER: socialuser
+      POSTGRES_PASSWORD: socialpass
+      POSTGRES_DB: socialnetworkdb_dev
+    ports:
+      - "5432:5432" # Expose PostgreSQL to host for direct access if needed
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data # Persistent data for dev
+    networks:
+      - social_network_dev_net
+
+  auth_service_dev:
+    build:
+      context: . # Build from the root of the project
+      dockerfile: Dockerfile.auth-service # Specify the Dockerfile
+    container_name: auth_service_dev
+    # If go.mod changes, image needs to be rebuilt.
+    # For faster local dev, you can mount your source code and use a tool like Air for live reloading,
+    # but this setup uses the compiled binary from the Dockerfile.
+    ports:
+      - "8080:8080" # Expose auth-service port 8080 to host
+    environment:
+      # These would ideally come from a .env file or secrets management in a real scenario
+      DATABASE_URL: "postgres://socialuser:socialpass@postgres_dev:5432/socialnetworkdb_dev?sslmode=disable"
+      JWT_SECRET_KEY: "your-super-secret-jwt-key-for-dev" # CHANGE THIS!
+      # Add other necessary environment variables
+      GIN_MODE: "debug" # Or "release" for production-like testing
+    depends_on:
+      - postgres_dev
+    networks:
+      - social_network_dev_net
+    # volumes: # Example for live reload (requires changes in Dockerfile and entrypoint)
+      # - ./cmd/auth-service:/app/cmd/auth-service
+      # - ./internal/authservice:/app/internal/authservice
+      # - ./pkg:/app/pkg
+      # - ./go.mod:/app/go.mod
+      # - ./go.sum:/app/go.sum
+
+  user_service_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.user-service
+    container_name: user_service_dev
+    ports:
+      - "8081:8081" # Expose user-service port 8081 to host
+    environment:
+      DATABASE_URL: "postgres://socialuser:socialpass@postgres_dev:5432/socialnetworkdb_dev?sslmode=disable"
+      GIN_MODE: "debug"
+      # Add other necessary environment variables (e.g., if it needs to call auth_service)
+      # AUTH_SERVICE_ADDR: "auth_service_dev:8080" # Example if using HTTP/REST
+    depends_on:
+      - postgres_dev
+    networks:
+      - social_network_dev_net
+
+  nginx_gateway_dev:
+    image: nginx:1.25-alpine
+    container_name: nginx_gateway_dev
+    ports:
+      - "80:80" # Expose Nginx on port 80 to host
+    volumes:
+      # Mount a simplified nginx.conf for docker-compose
+      # This nginx.conf will differ from the one for Kubernetes as service discovery is different.
+      - ./api-gateway-config/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth_service_dev
+      - user_service_dev
+    networks:
+      - social_network_dev_net
+
+volumes:
+  postgres_dev_data: # Defines the persistent volume for PostgreSQL
+
+networks:
+  social_network_dev_net:
+    driver: bridge
